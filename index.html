@@ -82,8 +82,7 @@ canvas{display:block;width:100%;height:100%;image-rendering:pixelated}
       <div id="player-name" style="color:#ff6699">
        THE ROARING NIGHT
       </div>
-      <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
-       <span style="color:#ff3366;font-size:8px">HP</span>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:4px"><span style="color:#ff3366;font-size:8px">HP</span>
        <div class="hp-bar-bg">
         <div class="hp-bar" id="hp-bar" style="width:100%"></div>
        </div><span id="hp-text" style="font-size:8px">20/20</span>
@@ -117,11 +116,9 @@ canvas{display:block;width:100%;height:100%;image-rendering:pixelated}
       * The Rook blocks your path.
      </div>
      <canvas id="battle-canvas" width="240" height="240" style="border:3px solid #fff;background:#000;image-rendering:pixelated"></canvas>
-     <div id="battle-menu">
-      <button class="battle-btn" data-action="fight">⚔ FIGHT</button> <button class="battle-btn" data-action="act">★ ACT</button> <button class="battle-btn" data-action="mercy">♥ MERCY</button>
+     <div id="battle-menu"><button class="battle-btn" data-action="fight">⚔ FIGHT</button> <button class="battle-btn" data-action="act">★ ACT</button> <button class="battle-btn" data-action="mercy">♥ MERCY</button>
      </div>
-     <div id="battle-hud">
-      <span>HP <span id="battle-hp">20/20</span></span>
+     <div id="battle-hud"><span>HP <span id="battle-hp">20/20</span></span>
      </div>
     </div>
     <div id="title-screen">
@@ -381,7 +378,193 @@ function updatePlayerMovement(dt){
   }
 }
 
-// ─── ENEMY AI ───
+// ─── ENEMY AI SYSTEM ───
+
+// Initialize enemy state on spawn
+function initializeEnemyState(e){
+  if(e.state) return; // Already initialized
+  e.state = 'idle';
+  e.moveTimer = 0;
+  e.moveInterval = getEnemyMoveSpeed(e.type);
+  e.lastDirections = []; // Track recent directions to prevent oscillation
+  e.wander = {x: e.x, y: e.y}; // Target for wandering
+  e.flankAngle = 0;
+  e.aggressiveness = getEnemyAggressiveness(e.type);
+  e.detectionRange = getEnemyDetectionRange(e.type);
+  e.attackRange = 0.8;
+}
+
+function getEnemyMoveSpeed(type){
+  const speeds = {rook:0.15, bishop:0.12, knight:0.08, queen:0.1};
+  return speeds[type] || 0.1;
+}
+
+function getEnemyAggressiveness(type){
+  const agg = {rook:0.8, bishop:0.6, knight:0.5, queen:0.9};
+  return agg[type] || 0.6;
+}
+
+function getEnemyDetectionRange(type){
+  const ranges = {rook:9, bishop:10, knight:7, queen:12};
+  return ranges[type] || 8;
+}
+
+function calculateAIMoveDirection(enemy, playerX, playerY, level){
+  const dx = playerX - enemy.x;
+  const dy = playerY - enemy.y;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+
+  let moveX = 0, moveY = 0;
+
+  if(enemy.state === 'idle'){
+    // Wander slowly
+    enemy.moveTimer -= getEnemyMoveSpeed(enemy.type);
+    if(enemy.moveTimer <= 0){
+      // Pick new wander target occasionally
+      if(Math.random() < 0.3){
+        const angle = Math.random()*Math.PI*2;
+        const dist = 2+Math.random()*3;
+        enemy.wander.x = enemy.x + Math.cos(angle)*dist;
+        enemy.wander.y = enemy.y + Math.sin(angle)*dist;
+      }
+      enemy.moveTimer = 1+Math.random()*0.5;
+    }
+
+    // Slow wander
+    const wanderDx = enemy.wander.x - enemy.x;
+    const wanderDy = enemy.wander.y - enemy.y;
+    const wanderDist = Math.sqrt(wanderDx*wanderDx + wanderDy*wanderDy);
+    if(wanderDist > 0.1){
+      moveX = (wanderDx/wanderDist) * 0.3;
+      moveY = (wanderDy/wanderDist) * 0.3;
+    }
+
+    // Switch to chase if player detected
+    if(dist < enemy.detectionRange){
+      enemy.state = 'chase';
+      playTone(400, 0.08, 0.03); // Alert sound
+    }
+  }
+
+  if(enemy.state === 'chase'){
+    if(dist > enemy.detectionRange + 3){
+      enemy.state = 'idle'; // Player escaped
+      enemy.moveTimer = 0;
+    } else if(dist > enemy.attackRange){
+      // Calculate AI-specific chase behavior
+      moveX = dx/dist;
+      moveY = dy/dist;
+
+      if(enemy.type === 'rook'){
+        // Aggressive straight-line pursuit
+        moveX = dx/dist * enemy.aggressiveness;
+        moveY = dy/dist * enemy.aggressiveness;
+      } else if(enemy.type === 'bishop'){
+        // Flank diagonally
+        enemy.flankAngle += 0.05;
+        const flankOffset = Math.sin(enemy.flankAngle)*0.3;
+        moveX = (dx/dist)*0.8 + Math.cos(enemy.flankAngle)*flankOffset;
+        moveY = (dy/dist)*0.8 + Math.sin(enemy.flankAngle)*flankOffset;
+        const len = Math.sqrt(moveX*moveX + moveY*moveY);
+        if(len>0){moveX/=len; moveY/=len;}
+      } else if(enemy.type === 'knight'){
+        // Unpredictable jumpy approach with randomness
+        if(Math.random() < 0.15){
+          // Random jump direction
+          const jumpAngle = Math.random()*Math.PI*2;
+          moveX = Math.cos(jumpAngle)*0.9;
+          moveY = Math.sin(jumpAngle)*0.9;
+        } else {
+          // Usually pursue with slight randomness
+          const randomAngle = (Math.random()-0.5)*0.4;
+          moveX = (dx/dist)*Math.cos(randomAngle) - (dy/dist)*Math.sin(randomAngle);
+          moveY = (dx/dist)*Math.sin(randomAngle) + (dy/dist)*Math.cos(randomAngle);
+          const len = Math.sqrt(moveX*moveX + moveY*moveY);
+          if(len>0){moveX/=len; moveY/=len;}
+        }
+      } else if(enemy.type === 'queen'){
+        // Intelligent combination: adapt based on distance
+        if(dist < 3){
+          // Close: use rook aggression
+          moveX = (dx/dist)*0.95;
+          moveY = (dy/dist)*0.95;
+        } else {
+          // Far: use bishop flanking
+          enemy.flankAngle += 0.03;
+          const flankOffset = Math.sin(enemy.flankAngle)*0.2;
+          moveX = (dx/dist)*0.8 + Math.cos(enemy.flankAngle)*flankOffset;
+          moveY = (dy/dist)*0.8 + Math.sin(enemy.flankAngle)*flankOffset;
+          const len = Math.sqrt(moveX*moveX + moveY*moveY);
+          if(len>0){moveX/=len; moveY/=len;}
+        }
+      }
+
+      // Add slight randomness to prevent perfect prediction
+      moveX += (Math.random()-0.5)*0.08;
+      moveY += (Math.random()-0.5)*0.08;
+      const moveLen = Math.sqrt(moveX*moveX + moveY*moveY);
+      if(moveLen>0){moveX/=moveLen; moveY/=moveLen;}
+    }
+  }
+
+  // Track last directions to prevent oscillation
+  enemy.lastDirections.push({x: moveX, y: moveY});
+  if(enemy.lastDirections.length > 5) enemy.lastDirections.shift();
+
+  return {x: moveX, y: moveY};
+}
+
+function applyPathfinding(enemy, moveDir, level){
+  const ENEMY_RADIUS = 0.35;
+  const baseSpeed = (enemy.state === 'chase' ? 2.0 : 0.8) * getEnemyAggressiveness(enemy.type);
+  
+  // Check if can move in intended direction
+  const canMove = (px, py) => {
+    const points = [
+      [px - ENEMY_RADIUS, py - ENEMY_RADIUS],
+      [px + ENEMY_RADIUS, py - ENEMY_RADIUS],
+      [px - ENEMY_RADIUS, py + ENEMY_RADIUS],
+      [px + ENEMY_RADIUS, py + ENEMY_RADIUS],
+      [px, py]
+    ];
+    for(const [cx, cy] of points){
+      const gx = Math.floor(cx);
+      const gy = Math.floor(cy);
+      if(gx < 0 || gy < 0 || gy >= level.h || gx >= level.w || level.map[gy][gx] === 1) return false;
+    }
+    return true;
+  };
+
+  // Try primary direction
+  let nx = enemy.x + moveDir.x * baseSpeed * 0.016; // Approximate dt
+  let ny = enemy.y + moveDir.y * baseSpeed * 0.016;
+
+  if(canMove(nx, ny)){
+    enemy.x = nx;
+    enemy.y = ny;
+  } else {
+    // Try axis-aligned movements as fallback
+    const tryX = enemy.x + moveDir.x * baseSpeed * 0.016;
+    const tryY = enemy.y + moveDir.y * baseSpeed * 0.016;
+
+    if(canMove(tryX, enemy.y)){
+      enemy.x = tryX;
+    } else if(canMove(enemy.x, tryY)){
+      enemy.y = tryY;
+    } else if(enemy.type === 'knight'){
+      // Knight can try diagonal alternate
+      if(canMove(tryX, enemy.y + 0.2)){
+        enemy.x = tryX;
+        enemy.y += 0.2;
+      } else if(canMove(enemy.x + 0.2, tryY)){
+        enemy.x += 0.2;
+        enemy.y = tryY;
+      }
+    }
+    // else: stuck, don't move this frame
+  }
+}
+
 function updateEnemies(dt){
   if(G.inputLocked||G.transitioning) return;
   
@@ -389,33 +572,30 @@ function updateEnemies(dt){
   
   G.enemies.forEach(e=>{
     if(e.spared||e.hp<=0) return;
-    
+
+    // Initialize state on first update
+    if(!e.state) initializeEnemyState(e);
+
+    // Update move timer
+    e.moveTimer += dt;
+
+    // Move at controlled intervals based on enemy type
+    if(e.moveTimer >= e.moveInterval){
+      e.moveTimer = 0;
+
+      // Calculate AI direction
+      const moveDir = calculateAIMoveDirection(e, G.px, G.py, level);
+
+      // Apply pathfinding and movement
+      applyPathfinding(e, moveDir, dt);
+    }
+
+    // Check collision with player (battle trigger)
     const dx = G.px - e.x;
     const dy = G.py - e.y;
     const dist = Math.sqrt(dx*dx + dy*dy);
-    
-    // Only chase if reasonably close
-    if(dist < 8 && dist > 0.5){
-      const speed = 1.2 + Math.random()*0.3;
-      e.x += (dx/dist) * speed * dt;
-      e.y += (dy/dist) * speed * dt;
-      
-      // Collision with walls - simple bounce back
-      const ENEMY_RADIUS = 0.35;
-      const points = [[e.x-ENEMY_RADIUS,e.y-ENEMY_RADIUS],[e.x+ENEMY_RADIUS,e.y-ENEMY_RADIUS],[e.x-ENEMY_RADIUS,e.y+ENEMY_RADIUS],[e.x+ENEMY_RADIUS,e.y+ENEMY_RADIUS]];
-      let hitWall = false;
-      for(const [cx,cy] of points){
-        const gx = Math.floor(cx);
-        const gy = Math.floor(cy);
-        if(gx < 0 || gy < 0 || gy >= level.h || gx >= level.w || level.map[gy][gx] === 1){
-          hitWall = true;
-          break;
-        }
-      }
-      if(hitWall){
-        e.x -= (dx/dist) * speed * dt;
-        e.y -= (dy/dist) * speed * dt;
-      }
+    if(dist < e.attackRange){
+      startBattle(e);
     }
   });
 }
@@ -1057,5 +1237,5 @@ window.elementSdk.init({
   ])
 });
 </script>
- <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9f521a95043f0cb4',t:'MTc3NzY3MzI5Ni4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9f52307e03be0cb4',t:'MTc3NzY3NDE5My4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
