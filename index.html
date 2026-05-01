@@ -1,0 +1,1061 @@
+<!doctype html>
+<html lang="en" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>THE ROARING NIGHT</title>
+  <script src="/_sdk/element_sdk.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&amp;family=VT323&amp;display=swap" rel="stylesheet">
+  <style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;background:#000;font-family:'VT323',monospace;color:#e8e8e8}
+#app{width:100%;height:100%;position:relative;overflow:hidden}
+canvas{display:block;width:100%;height:100%;image-rendering:pixelated}
+
+/* UI Overlays */
+.ui-layer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10}
+.ui-layer *{pointer-events:auto}
+
+/* HUD */
+#hud{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;align-items:flex-start;font-family:'Press Start 2P',monospace;font-size:10px;z-index:20;pointer-events:none}
+#hud *{pointer-events:auto}
+.hud-box{background:rgba(10,5,20,0.85);border:2px solid #4a3a6a;border-radius:4px;padding:8px 12px}
+.hp-bar-bg{width:120px;height:8px;background:#1a0a2a;border-radius:2px;margin-top:4px;overflow:hidden}
+.hp-bar{height:100%;background:linear-gradient(90deg,#ff3366,#ff6699);border-radius:2px;transition:width 0.3s}
+
+/* Dialogue */
+#dialogue-box{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);width:min(90%,600px);background:rgba(10,5,20,0.95);border:3px solid #4a3a6a;border-radius:6px;padding:16px 20px;font-family:'VT323',monospace;font-size:22px;line-height:1.4;z-index:30;display:none}
+#dialogue-box.show{display:block;animation:slideUp 0.3s ease-out}
+#speaker{color:#ff6699;font-family:'Press Start 2P',monospace;font-size:10px;margin-bottom:8px}
+#dialogue-text{min-height:40px}
+#dialogue-choices{margin-top:10px;display:flex;flex-direction:column;gap:6px}
+.choice-btn{background:none;border:2px solid #3a2a5a;color:#ccc;padding:6px 12px;font-family:'VT323',monospace;font-size:20px;text-align:left;cursor:pointer;border-radius:3px;transition:all 0.15s}
+.choice-btn:hover,.choice-btn:focus{border-color:#ff6699;color:#fff;background:rgba(255,102,153,0.1)}
+#dialogue-continue{color:#8866aa;font-size:14px;margin-top:6px;animation:blink 1s infinite}
+
+/* Battle */
+#battle-screen{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);z-index:25;display:none;flex-direction:column;align-items:center;justify-content:center}
+#battle-screen.show{display:flex;animation:fadeIn 0.5s}
+#battle-arena{width:240px;height:240px;border:3px solid #fff;position:relative;overflow:hidden;background:#000}
+#battle-soul{width:16px;height:16px;position:absolute;transition:none}
+#battle-hud{margin-top:16px;display:flex;gap:20px;font-family:'Press Start 2P',monospace;font-size:10px}
+.battle-btn{background:none;border:2px solid #4a3a6a;color:#e8e8e8;padding:8px 16px;font-family:'Press Start 2P',monospace;font-size:10px;cursor:pointer;border-radius:3px;transition:all 0.15s}
+.battle-btn:hover{border-color:#ff6699;color:#ff6699}
+.battle-btn.selected{border-color:#ffaa00;color:#ffaa00}
+#battle-text{font-family:'VT323',monospace;font-size:22px;margin-bottom:16px;text-align:center;min-height:30px}
+#enemy-display{margin-bottom:20px;text-align:center}
+#enemy-name{font-family:'Press Start 2P',monospace;font-size:12px;color:#ff6699;margin-bottom:8px}
+#enemy-hp-bg{width:200px;height:6px;background:#1a0a2a;border-radius:2px;margin:0 auto;overflow:hidden}
+#enemy-hp{height:100%;background:#00cc66;border-radius:2px;transition:width 0.3s}
+#battle-menu{display:flex;gap:10px;margin-top:12px}
+
+/* Title */
+#title-screen{position:absolute;top:0;left:0;width:100%;height:100%;background:#000;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center}
+#title-text{font-family:'Press Start 2P',monospace;font-size:clamp(14px,3vw,24px);color:#ff6699;text-shadow:0 0 20px rgba(255,102,153,0.5);margin-bottom:8px;text-align:center}
+#title-sub{font-family:'VT323',monospace;font-size:clamp(16px,2.5vw,22px);color:#8866aa;margin-bottom:40px}
+.title-btn{background:none;border:2px solid #4a3a6a;color:#e8e8e8;padding:10px 30px;font-family:'Press Start 2P',monospace;font-size:12px;cursor:pointer;border-radius:3px;margin:6px;transition:all 0.2s}
+.title-btn:hover{border-color:#ff6699;color:#ff6699;box-shadow:0 0 12px rgba(255,102,153,0.3)}
+
+/* Transitions */
+#screen-fade{position:absolute;top:0;left:0;width:100%;height:100%;background:#000;z-index:40;opacity:0;pointer-events:none;transition:opacity 0.5s}
+
+/* Move indicator */
+#move-indicator{position:absolute;bottom:60px;right:12px;font-family:'Press Start 2P',monospace;font-size:9px;color:#8866aa;z-index:20;text-align:right}
+#turn-label{color:#ffaa00;margin-bottom:4px}
+
+@keyframes slideUp{from{transform:translateX(-50%) translateY(20px);opacity:0}to{transform:translateX(-50%) translateY(0);opacity:1}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+</style>
+  <style>body { box-sizing: border-box; }</style>
+  <script src="https://cdn.tailwindcss.com/3.4.17" type="text/javascript"></script>
+  <script src="/_sdk/data_sdk.js" type="text/javascript"></script>
+ </head>
+ <body class="h-full">
+  <div id="app">
+   <canvas id="game-canvas"></canvas>
+   <div class="ui-layer">
+    <div id="hud" style="display:none">
+     <div class="hud-box">
+      <div id="player-name" style="color:#ff6699">
+       THE ROARING NIGHT
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+       <span style="color:#ff3366;font-size:8px">HP</span>
+       <div class="hp-bar-bg">
+        <div class="hp-bar" id="hp-bar" style="width:100%"></div>
+       </div><span id="hp-text" style="font-size:8px">20/20</span>
+      </div>
+     </div>
+     <div id="move-indicator">
+      <div id="turn-label">
+       YOUR TURN
+      </div>
+     </div>
+    </div>
+    <div id="dialogue-box">
+     <div id="speaker"></div>
+     <div id="dialogue-text"></div>
+     <div id="dialogue-choices"></div>
+     <div id="dialogue-continue">
+      ▼ SPACE
+     </div>
+    </div>
+    <div id="battle-screen">
+     <div id="enemy-display">
+      <div id="enemy-name"></div>
+      <div id="enemy-sprite" style="font-size:48px;margin:8px 0">
+       ♜
+      </div>
+      <div id="enemy-hp-bg">
+       <div id="enemy-hp" style="width:100%"></div>
+      </div>
+     </div>
+     <div id="battle-text">
+      * The Rook blocks your path.
+     </div>
+     <canvas id="battle-canvas" width="240" height="240" style="border:3px solid #fff;background:#000;image-rendering:pixelated"></canvas>
+     <div id="battle-menu">
+      <button class="battle-btn" data-action="fight">⚔ FIGHT</button> <button class="battle-btn" data-action="act">★ ACT</button> <button class="battle-btn" data-action="mercy">♥ MERCY</button>
+     </div>
+     <div id="battle-hud">
+      <span>HP <span id="battle-hp">20/20</span></span>
+     </div>
+    </div>
+    <div id="title-screen">
+     <div id="title-text">
+      THE ROARING NIGHT
+     </div>
+     <div id="title-sub">
+      Every move is a decision.
+     </div><button class="title-btn" id="start-btn">START</button>
+    </div>
+    <div id="screen-fade"></div>
+   </div>
+  </div>
+  <script>
+// ─── GAME ENGINE ───
+const canvas = document.getElementById('game-canvas');
+const ctx = canvas.getContext('2d');
+const battleCanvas = document.getElementById('battle-canvas');
+const bctx = battleCanvas.getContext('2d');
+
+// ─── CONFIG ───
+const defaultConfig = {
+  game_title: 'THE ROARING NIGHT',
+  background_color: '#0a0514',
+  surface_color: '#1a0a2e',
+  text_color: '#e8e8e8',
+  primary_color: '#ff6699',
+  secondary_color: '#4a3a6a'
+};
+
+const TILE = 40;
+
+// ─── STATE ───
+let G = {
+  scene: 'title', // title, overworld, battle, dialogue
+  level: 0,
+  px: 2.5, py: 2.5, // player position (now continuous, not grid-based)
+  vx: 0, vy: 0, // velocity
+  hp: 20, maxHp: 20,
+  enemies: [],
+  particles: [],
+  dialogueQueue: [],
+  karma: 0, // positive = peaceful
+  kills: 0,
+  battleState: null,
+  shakeTimer: 0, shakeIntensity: 0,
+  time: 0,
+  transitioning: false,
+  inputLocked: false,
+  lastFrameTime: 0
+};
+
+// ─── LEVELS ───
+const LEVELS = [
+  { // Level 0: Dark Ruins
+    name: 'THE DARK RUINS',
+    w: 12, h: 9,
+    spawn: [1,7],
+    exit: [10,1],
+    enemies: [
+      {x:5,y:4,type:'rook',name:'STONE ROOK',hp:12,maxHp:12,symbol:'♜',color:'#6688cc',pattern:'rook',mercyThreshold:2,actCount:0,spared:false},
+      {x:8,y:6,type:'bishop',name:'SHADOW BISHOP',hp:10,maxHp:10,symbol:'♝',color:'#aa66cc',pattern:'bishop',mercyThreshold:2,actCount:0,spared:false}
+    ],
+    // 0=floor,1=wall,2=exit,3=trigger(dialogue),4=secret
+    map:[
+      [1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,0,0,0,1,0,0,0,0,0,2,1],
+      [1,0,0,0,1,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,1,1,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,1],
+      [1,1,1,0,0,0,0,1,0,0,0,1],
+      [1,0,0,0,0,0,0,1,0,0,0,1],
+      [1,0,0,3,0,0,0,0,0,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1]
+    ],
+    triggers:{
+      '3,7':{speaker:'???',text:'Who... are you? Your shadow moves like a chess piece across this ruined board...',once:true,done:false}
+    },
+    fog: true,
+    ambience: '#0a0514'
+  },
+  { // Level 1: Castle Halls
+    name: 'THE OBSIDIAN HALL',
+    w: 14, h: 10,
+    spawn: [1,8],
+    exit: [12,1],
+    enemies: [
+      {x:6,y:5,type:'knight',name:'PHANTOM KNIGHT',hp:15,maxHp:15,symbol:'♞',color:'#cc8844',pattern:'knight',mercyThreshold:3,actCount:0,spared:false},
+      {x:10,y:3,type:'rook',name:'IRON ROOK',hp:18,maxHp:18,symbol:'♜',color:'#88aacc',pattern:'rook',mercyThreshold:2,actCount:0,spared:false}
+    ],
+    map:[
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,0,0,0,0,1,0,0,0,0,0,0,2,1],
+      [1,0,0,0,0,1,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,1,0,0,0,0,0,0,1,1,0,0,0,1],
+      [1,0,0,0,0,0,0,0,1,0,0,0,0,1],
+      [1,0,0,0,1,1,0,0,0,0,0,1,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,1,0,1],
+      [1,0,3,0,0,0,0,0,0,0,0,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+    ],
+    triggers:{
+      '2,8':{speaker:'ECHO',text:'The pieces remember you... THE ROARING NIGHT... you once commanded them all.',once:true,done:false}
+    },
+    fog: true,
+    ambience: '#0d0820'
+  },
+  { // Level 2: The Void
+    name: 'THE VOID',
+    w: 11, h: 11,
+    spawn: [5,9],
+    exit: [5,1],
+    enemies: [
+      {x:3,y:5,type:'queen',name:'THE WHITE QUEEN',hp:25,maxHp:25,symbol:'♛',color:'#ffffff',pattern:'queen',mercyThreshold:4,actCount:0,spared:false}
+    ],
+    map:[
+      [1,1,1,1,1,1,1,1,1,1,1],
+      [1,0,0,0,0,2,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,3,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1]
+    ],
+    triggers:{
+      '5,8':{speaker:'THE ROARING NIGHT',text:'I remember now... I was the King. I sacrificed myself to save them all. And now... I must choose again.',once:true,done:false}
+    },
+    fog: false,
+    ambience: '#020008'
+  }
+];
+
+// ─── AUDIO (Web Audio API) ───
+let audioCtx = null;
+let isMuted = false;
+
+function initAudio(){
+  if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+}
+
+function playTone(freq, dur=0.1, vol=0.08, type='square'){
+  if(!audioCtx||isMuted) return;
+  try{
+    const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+    o.type=type; o.frequency.value=freq;
+    g.gain.setValueAtTime(vol,audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+dur);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime+dur);
+  }catch(e){}
+}
+
+function playMove(){ playTone(330,0.05,0.06); setTimeout(()=>playTone(440,0.05,0.06),50); }
+function playHit(){ playTone(150,0.15,0.1,'sawtooth'); }
+function playHeal(){ playTone(523,0.1,0.06); setTimeout(()=>playTone(659,0.1,0.06),100); setTimeout(()=>playTone(784,0.15,0.06),200); }
+function playSelect(){ playTone(600,0.04,0.05); }
+function playDamage(){ playTone(100,0.2,0.12,'sawtooth'); }
+
+// ─── PARTICLES ───
+function spawnParticle(x,y,color='#ff669966',life=120,vx=0,vy=0,size=2){
+  G.particles.push({x,y,vx:vx||(Math.random()-0.5)*0.3,vy:vy||(-Math.random()*0.5-0.1),life,maxLife:life,color,size});
+}
+
+function spawnEmbers(cx,cy,count=5){
+  for(let i=0;i<count;i++) spawnParticle(cx+Math.random()*60-30,cy+Math.random()*60-30,'#ff884433',80+Math.random()*60);
+}
+
+function spawnFog(w,h){
+  for(let i=0;i<3;i++) spawnParticle(Math.random()*w,Math.random()*h,'#4a3a6a18',200+Math.random()*100,Math.random()*0.2-0.1,Math.random()*0.1-0.05,20+Math.random()*30);
+}
+
+// ─── MOVEMENT ───
+const PLAYER_SPEED = 3.5; // tiles per second
+let keysPressed = {};
+
+function updatePlayerMovement(dt){
+  if(G.scene!=='overworld'||G.inputLocked||G.transitioning) return;
+
+  const level = LEVELS[G.level];
+  const map = level.map;
+  
+  // Calculate intended velocity based on pressed keys
+  let nx = G.px, ny = G.py;
+  
+  if(keysPressed['ArrowUp']||keysPressed['w']) ny -= PLAYER_SPEED * dt;
+  if(keysPressed['ArrowDown']||keysPressed['s']) ny += PLAYER_SPEED * dt;
+  if(keysPressed['ArrowLeft']||keysPressed['a']) nx -= PLAYER_SPEED * dt;
+  if(keysPressed['ArrowRight']||keysPressed['d']) nx += PLAYER_SPEED * dt;
+
+  // Collision detection: check if new position would hit a wall or solid tile
+  // Use multiple sample points around player to handle collisions smoothly
+  const PLAYER_RADIUS = 0.35;
+  const canMoveTo = (px, py) => {
+    // Check if player at position (px, py) would collide with walls
+    const points = [
+      [px - PLAYER_RADIUS, py - PLAYER_RADIUS],
+      [px + PLAYER_RADIUS, py - PLAYER_RADIUS],
+      [px - PLAYER_RADIUS, py + PLAYER_RADIUS],
+      [px + PLAYER_RADIUS, py + PLAYER_RADIUS],
+      [px, py]
+    ];
+    
+    for(const [cx, cy] of points){
+      const gridX = Math.floor(cx);
+      const gridY = Math.floor(cy);
+      if(gridX < 0 || gridY < 0 || gridY >= level.h || gridX >= level.w) return false;
+      if(map[gridY][gridX] === 1) return false;
+    }
+    return true;
+  };
+
+  // Try to move
+  let moved = false;
+  if(canMoveTo(nx, G.py)){
+    G.px = nx;
+    moved = true;
+  }
+  if(canMoveTo(G.px, ny)){
+    G.py = ny;
+    moved = true;
+  }
+
+  // Play sound once per actual movement frame
+  if(moved && (keysPressed['ArrowUp']||keysPressed['ArrowDown']||keysPressed['ArrowLeft']||keysPressed['ArrowRight']||keysPressed['w']||keysPressed['s']||keysPressed['a']||keysPressed['d'])){
+    if(G.time % 8 === 0) playMove();
+  }
+
+  // Check for enemy collision
+  G.enemies.forEach(e=>{
+    if(e.spared||e.hp<=0) return;
+    const dx = G.px - e.x, dy = G.py - e.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if(dist < 0.7){
+      startBattle(e);
+    }
+  });
+
+  // Check triggers (continuous, on grid square)
+  const gridX = Math.round(G.px);
+  const gridY = Math.round(G.py);
+  const key = `${gridX},${gridY}`;
+  if(level.triggers[key]&&!level.triggers[key].done){
+    const t = level.triggers[key];
+    showDialogue(t.speaker, t.text);
+    if(t.once) t.done = true;
+  }
+
+  // Check exit
+  if(Math.floor(G.px) === level.exit[0] && Math.floor(G.py) === level.exit[1]){
+    nextLevel();
+    return;
+  }
+}
+
+// ─── ENEMY AI ───
+function updateEnemies(dt){
+  if(G.inputLocked||G.transitioning) return;
+  
+  const level = LEVELS[G.level];
+  
+  G.enemies.forEach(e=>{
+    if(e.spared||e.hp<=0) return;
+    
+    const dx = G.px - e.x;
+    const dy = G.py - e.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    
+    // Only chase if reasonably close
+    if(dist < 8 && dist > 0.5){
+      const speed = 1.2 + Math.random()*0.3;
+      e.x += (dx/dist) * speed * dt;
+      e.y += (dy/dist) * speed * dt;
+      
+      // Collision with walls - simple bounce back
+      const ENEMY_RADIUS = 0.35;
+      const points = [[e.x-ENEMY_RADIUS,e.y-ENEMY_RADIUS],[e.x+ENEMY_RADIUS,e.y-ENEMY_RADIUS],[e.x-ENEMY_RADIUS,e.y+ENEMY_RADIUS],[e.x+ENEMY_RADIUS,e.y+ENEMY_RADIUS]];
+      let hitWall = false;
+      for(const [cx,cy] of points){
+        const gx = Math.floor(cx);
+        const gy = Math.floor(cy);
+        if(gx < 0 || gy < 0 || gy >= level.h || gx >= level.w || level.map[gy][gx] === 1){
+          hitWall = true;
+          break;
+        }
+      }
+      if(hitWall){
+        e.x -= (dx/dist) * speed * dt;
+        e.y -= (dy/dist) * speed * dt;
+      }
+    }
+  });
+}
+
+// ─── DIALOGUE ───
+let typewriterInterval = null;
+let fullDialogueText = '';
+let currentDialogueIdx = 0;
+let dialogueResolve = null;
+
+function showDialogue(speaker, text, choices=null){
+  return new Promise(resolve=>{
+    G.inputLocked = true;
+    dialogueResolve = resolve;
+    const box = document.getElementById('dialogue-box');
+    const spk = document.getElementById('speaker');
+    const txt = document.getElementById('dialogue-text');
+    const choicesDiv = document.getElementById('dialogue-choices');
+    const cont = document.getElementById('dialogue-continue');
+
+    spk.textContent = speaker;
+    txt.textContent = '';
+    choicesDiv.innerHTML = '';
+    fullDialogueText = text;
+    currentDialogueIdx = 0;
+    box.classList.add('show');
+
+    if(choices){
+      cont.style.display = 'none';
+      // Type out text first then show choices
+      typewriterInterval = setInterval(()=>{
+        if(currentDialogueIdx < fullDialogueText.length){
+          txt.textContent += fullDialogueText[currentDialogueIdx];
+          currentDialogueIdx++;
+          if(currentDialogueIdx%3===0) playTone(300+Math.random()*200,0.02,0.03);
+        } else {
+          clearInterval(typewriterInterval);
+          choices.forEach((c,i)=>{
+            const btn = document.createElement('button');
+            btn.className = 'choice-btn';
+            btn.textContent = c.text;
+            btn.onclick = ()=>{
+              playSelect();
+              closeDialogue();
+              if(c.karma) G.karma += c.karma;
+              resolve(c.value);
+            };
+            choicesDiv.appendChild(btn);
+          });
+        }
+      },30);
+    } else {
+      cont.style.display = 'block';
+      typewriterInterval = setInterval(()=>{
+        if(currentDialogueIdx < fullDialogueText.length){
+          txt.textContent += fullDialogueText[currentDialogueIdx];
+          currentDialogueIdx++;
+          if(currentDialogueIdx%3===0) playTone(300+Math.random()*200,0.02,0.03);
+        } else {
+          clearInterval(typewriterInterval);
+        }
+      },30);
+    }
+  });
+}
+
+function advanceDialogue(){
+  if(!document.getElementById('dialogue-box').classList.contains('show')) return;
+  if(currentDialogueIdx < fullDialogueText.length){
+    // Skip to end
+    clearInterval(typewriterInterval);
+    document.getElementById('dialogue-text').textContent = fullDialogueText;
+    currentDialogueIdx = fullDialogueText.length;
+  } else {
+    closeDialogue();
+    if(dialogueResolve) dialogueResolve('continue');
+  }
+}
+
+function closeDialogue(){
+  document.getElementById('dialogue-box').classList.remove('show');
+  G.inputLocked = false;
+  clearInterval(typewriterInterval);
+}
+
+// ─── BATTLE SYSTEM ───
+let battleSoul = {x:112,y:112,speed:2.5};
+let battleProjectiles = [];
+let battlePhase = 'menu'; // menu, dodge, act, result
+let battleEnemy = null;
+let battleTimer = 0;
+let battleKeys = {};
+
+function startBattle(enemy){
+  initAudio();
+  battleEnemy = enemy;
+  G.scene = 'battle';
+  G.inputLocked = true;
+  battleSoul = {x:112,y:112,speed:2.5};
+  battleProjectiles = [];
+  battlePhase = 'menu';
+  battleTimer = 0;
+
+  document.getElementById('battle-screen').classList.add('show');
+  document.getElementById('enemy-name').textContent = enemy.name;
+  document.getElementById('enemy-sprite').textContent = enemy.symbol;
+  document.getElementById('enemy-sprite').style.color = enemy.color;
+  updateBattleHP();
+  document.getElementById('battle-text').textContent = `* ${enemy.name} blocks your path!`;
+  showBattleMenu();
+}
+
+function updateBattleHP(){
+  const pct = (G.hp/G.maxHp)*100;
+  document.getElementById('battle-hp').textContent = `${G.hp}/${G.maxHp}`;
+  document.getElementById('hp-bar').style.width = pct+'%';
+  document.getElementById('hp-text').textContent = `${G.hp}/${G.maxHp}`;
+  if(battleEnemy){
+    const epct = (battleEnemy.hp/battleEnemy.maxHp)*100;
+    document.getElementById('enemy-hp').style.width = epct+'%';
+  }
+}
+
+function showBattleMenu(){
+  battlePhase = 'menu';
+  document.getElementById('battle-menu').style.display = 'flex';
+}
+
+function battleAction(action){
+  document.getElementById('battle-menu').style.display = 'none';
+  playSelect();
+
+  if(action==='fight'){
+    // Deal damage
+    const dmg = 4 + Math.floor(Math.random()*4);
+    battleEnemy.hp = Math.max(0, battleEnemy.hp - dmg);
+    G.shakeTimer = 10; G.shakeIntensity = 4;
+    playHit();
+    updateBattleHP();
+    document.getElementById('battle-text').textContent = `* You dealt ${dmg} damage!`;
+
+    if(battleEnemy.hp <= 0){
+      G.kills++;
+      setTimeout(()=>{
+        document.getElementById('battle-text').textContent = `* ${battleEnemy.name} was defeated...`;
+        setTimeout(()=>endBattle(false),1500);
+      },800);
+      return;
+    }
+    setTimeout(()=>startDodgePhase(),1000);
+  } else if(action==='act'){
+    battleEnemy.actCount++;
+    const msgs = [
+      `* You study ${battleEnemy.name}'s movements...`,
+      `* You offer a peaceful gesture...`,
+      `* ${battleEnemy.name} seems to soften...`,
+      `* ${battleEnemy.name}'s guard is lowering!`
+    ];
+    document.getElementById('battle-text').textContent = msgs[Math.min(battleEnemy.actCount-1, msgs.length-1)];
+    G.karma++;
+    setTimeout(()=>startDodgePhase(),1000);
+  } else if(action==='mercy'){
+    if(battleEnemy.actCount >= battleEnemy.mercyThreshold){
+      G.karma += 3;
+      battleEnemy.spared = true;
+      playHeal();
+      document.getElementById('battle-text').textContent = `* You spared ${battleEnemy.name}.`;
+      setTimeout(()=>endBattle(true),1500);
+    } else {
+      document.getElementById('battle-text').textContent = `* ${battleEnemy.name} isn't ready to be spared yet.`;
+      setTimeout(()=>startDodgePhase(),1000);
+    }
+  }
+}
+
+function startDodgePhase(){
+  battlePhase = 'dodge';
+  battleTimer = 180; // 3 seconds at 60 logic ticks
+  battleProjectiles = [];
+  document.getElementById('battle-text').textContent = '* Dodge!';
+
+  // Spawn projectiles based on enemy pattern
+  spawnBattleProjectiles();
+}
+
+function spawnBattleProjectiles(){
+  const pattern = battleEnemy.pattern;
+  if(pattern==='rook'){
+    // Horizontal and vertical lines
+    for(let i=0;i<4;i++){
+      const side = Math.floor(Math.random()*4);
+      let px,py,vx,vy;
+      if(side===0){px=-10;py=Math.random()*220+10;vx=1.5+Math.random();vy=0;}
+      else if(side===1){px=250;py=Math.random()*220+10;vx=-1.5-Math.random();vy=0;}
+      else if(side===2){px=Math.random()*220+10;py=-10;vx=0;vy=1.5+Math.random();}
+      else{px=Math.random()*220+10;py=250;vx=0;vy=-1.5-Math.random();}
+      battleProjectiles.push({x:px,y:py,vx,vy,size:6,color:'#6688cc',symbol:'♜',life:200});
+    }
+  } else if(pattern==='bishop'){
+    // Diagonal projectiles
+    for(let i=0;i<5;i++){
+      const angle = Math.random()*Math.PI*2;
+      const speed = 1.2+Math.random()*0.8;
+      battleProjectiles.push({x:120+Math.cos(angle)*130,y:120+Math.sin(angle)*130,
+        vx:-Math.cos(angle)*speed,vy:-Math.sin(angle)*speed,size:5,color:'#aa66cc',symbol:'♝',life:200});
+    }
+  } else if(pattern==='knight'){
+    // L-shaped jumpy projectiles
+    for(let i=0;i<3;i++){
+      const tx = Math.random()*200+20, ty = Math.random()*200+20;
+      battleProjectiles.push({x:tx,y:-10,vx:0,vy:2,size:8,color:'#cc8844',symbol:'♞',life:150,
+        jumpTimer:30+Math.floor(Math.random()*30)});
+    }
+  } else if(pattern==='queen'){
+    // Combination: radial burst
+    for(let i=0;i<8;i++){
+      const angle = (i/8)*Math.PI*2;
+      battleProjectiles.push({x:120,y:120,vx:Math.cos(angle)*1.5,vy:Math.sin(angle)*1.5,
+        size:5,color:'#ffffff',symbol:'♛',life:180});
+    }
+  }
+}
+
+function updateBattle(){
+  if(battlePhase!=='dodge') return;
+
+  // Move soul
+  const sp = battleSoul.speed;
+  if(battleKeys['ArrowLeft']||battleKeys['a']) battleSoul.x = Math.max(4,battleSoul.x-sp);
+  if(battleKeys['ArrowRight']||battleKeys['d']) battleSoul.x = Math.min(236,battleSoul.x+sp);
+  if(battleKeys['ArrowUp']||battleKeys['w']) battleSoul.y = Math.max(4,battleSoul.y-sp);
+  if(battleKeys['ArrowDown']||battleKeys['s']) battleSoul.y = Math.min(236,battleSoul.y+sp);
+
+  // Update projectiles
+  battleProjectiles.forEach(p=>{
+    p.x += p.vx; p.y += p.vy; p.life--;
+    if(p.jumpTimer){
+      p.jumpTimer--;
+      if(p.jumpTimer===0){
+        // Jump to new position near soul
+        p.x = battleSoul.x + (Math.random()-0.5)*80;
+        p.y = battleSoul.y - 60;
+        p.vx = (Math.random()-0.5)*1.5;
+        p.vy = 1.5;
+        p.jumpTimer = 40+Math.floor(Math.random()*20);
+      }
+    }
+    // Collision
+    const dx=p.x-battleSoul.x, dy=p.y-battleSoul.y;
+    if(Math.sqrt(dx*dx+dy*dy)<p.size+6){
+      G.hp = Math.max(0,G.hp-1);
+      p.life = 0;
+      G.shakeTimer = 6; G.shakeIntensity = 3;
+      playDamage();
+      updateBattleHP();
+    }
+  });
+  battleProjectiles = battleProjectiles.filter(p=>p.life>0);
+
+  battleTimer--;
+  if(battleTimer<=0||G.hp<=0){
+    battlePhase = 'menu';
+    if(G.hp<=0){
+      document.getElementById('battle-text').textContent = '* You fell in battle...';
+      setTimeout(()=>{
+        // Reset
+        G.hp = G.maxHp;
+        endBattle(false);
+        updateBattleHP();
+      },2000);
+    } else {
+      document.getElementById('battle-text').textContent = `* ${battleEnemy.name} prepares...`;
+      setTimeout(showBattleMenu,600);
+    }
+  }
+}
+
+function renderBattle(){
+  bctx.fillStyle = '#000';
+  bctx.fillRect(0,0,240,240);
+
+  // Projectiles
+  battleProjectiles.forEach(p=>{
+    bctx.fillStyle = p.color;
+    bctx.font = `${p.size*2}px serif`;
+    bctx.textAlign = 'center';
+    bctx.fillText(p.symbol||'●',p.x,p.y+p.size);
+  });
+
+  // Soul (heart)
+  const sx=battleSoul.x, sy=battleSoul.y;
+  bctx.fillStyle = '#ff3366';
+  bctx.beginPath();
+  // Simple heart
+  const hs = 7;
+  bctx.moveTo(sx,sy+hs*0.4);
+  bctx.bezierCurveTo(sx,sy-hs*0.2,sx-hs,sy-hs*0.2,sx-hs,sy+hs*0.1);
+  bctx.bezierCurveTo(sx-hs,sy+hs*0.6,sx,sy+hs,sx,sy+hs);
+  bctx.bezierCurveTo(sx,sy+hs,sx+hs,sy+hs*0.6,sx+hs,sy+hs*0.1);
+  bctx.bezierCurveTo(sx+hs,sy-hs*0.2,sx,sy-hs*0.2,sx,sy+hs*0.4);
+  bctx.fill();
+
+  // Timer bar
+  if(battlePhase==='dodge'){
+    bctx.fillStyle = '#333';
+    bctx.fillRect(10,230,220,4);
+    bctx.fillStyle = '#ffaa00';
+    bctx.fillRect(10,230,220*(battleTimer/180),4);
+  }
+}
+
+function endBattle(spared){
+  document.getElementById('battle-screen').classList.remove('show');
+  G.scene = 'overworld';
+  G.inputLocked = false;
+  if(!spared){
+    // Remove enemy
+    const idx = G.enemies.indexOf(battleEnemy);
+    if(idx>=0) G.enemies.splice(idx,1);
+  }
+  battleEnemy = null;
+}
+
+// ─── LEVEL MANAGEMENT ───
+function loadLevel(idx){
+  G.level = idx;
+  const level = LEVELS[idx];
+  G.px = level.spawn[0]+0.5; G.py = level.spawn[1]+0.5;
+  G.enemies = level.enemies.map(e=>({...e, x: e.x+0.5, y: e.y+0.5}));
+  G.inputLocked = false;
+  G.particles = [];
+  document.getElementById('hud').style.display = 'flex';
+
+  // Show level name
+  showDialogue('', level.name).then(()=>{
+    G.inputLocked = false;
+  });
+}
+
+async function nextLevel(){
+  G.inputLocked = true;
+  G.transitioning = true;
+  const fade = document.getElementById('screen-fade');
+  fade.style.opacity = '1';
+  fade.style.pointerEvents = 'all';
+
+  await new Promise(r=>setTimeout(r,600));
+
+  if(G.level < LEVELS.length-1){
+    loadLevel(G.level+1);
+  } else {
+    // ENDING
+    showEnding();
+    return;
+  }
+
+  await new Promise(r=>setTimeout(r,200));
+  fade.style.opacity = '0';
+  fade.style.pointerEvents = 'none';
+  G.transitioning = false;
+}
+
+function showEnding(){
+  const fade = document.getElementById('screen-fade');
+  const peaceful = G.karma > 5 && G.kills === 0;
+  const violent = G.kills >= 3;
+
+  let endText, endSub;
+  if(peaceful){
+    endText = 'THE MERCIFUL ENDING';
+    endSub = 'THE ROARING NIGHT chose compassion. The pieces found peace. You remembered who you were — not a conqueror, but a guardian.';
+  } else if(violent){
+    endText = 'THE SILENT ENDING';
+    endSub = 'THE ROARING NIGHT chose power. The board is empty now. You remembered who you were — the king who destroyed his own kingdom.';
+  } else {
+    endText = 'THE UNCERTAIN ENDING';
+    endSub = 'THE ROARING NIGHT walked a middle path. Some were spared, some were not. The truth of your identity remains... unclear.';
+  }
+
+  document.getElementById('title-screen').style.display = 'flex';
+  document.getElementById('title-text').textContent = endText;
+  document.getElementById('title-text').style.color = peaceful?'#66ccaa':violent?'#cc3333':'#8866aa';
+  document.getElementById('title-sub').textContent = endSub;
+  document.getElementById('start-btn').textContent = 'PLAY AGAIN';
+  document.getElementById('start-btn').onclick = ()=>{ resetGame(); };
+  fade.style.opacity = '0'; fade.style.pointerEvents = 'none';
+  G.transitioning = false;
+  G.scene = 'title';
+}
+
+function resetGame(){
+  G.hp = G.maxHp; G.karma = 0; G.kills = 0;
+  LEVELS.forEach(l=>{Object.values(l.triggers).forEach(t=>{t.done=false})});
+  document.getElementById('title-screen').style.display = 'none';
+  document.getElementById('title-text').style.color = '#ff6699';
+  loadLevel(0);
+  updateBattleHP();
+  G.scene = 'overworld';
+}
+
+// ─── RENDERING ───
+function resizeCanvas(){
+  canvas.width = canvas.clientWidth;
+  canvas.height = canvas.clientHeight;
+}
+
+function updateTurnDisplay(){
+  // Turn display removed - now real-time movement
+}
+
+function render(timestamp){
+  requestAnimationFrame(render);
+  
+  // Calculate delta time
+  const currentTime = performance.now();
+  let dt = (currentTime - G.lastFrameTime) / 1000; // Convert to seconds
+  G.lastFrameTime = currentTime;
+  dt = Math.min(dt, 0.05); // Cap at 50ms to prevent large jumps
+  
+  G.time++;
+
+  if(G.scene==='battle'){
+    updateBattle();
+    renderBattle();
+    return;
+  }
+
+  if(G.scene!=='overworld') return;
+
+  // Update player and enemy positions continuously
+  updatePlayerMovement(dt);
+  updateEnemies(dt);
+
+  const W = canvas.width, H = canvas.height;
+  const level = LEVELS[G.level];
+  if(!level) return;
+
+  // Camera
+  const camX = G.px*TILE - W/2 + TILE/2;
+  const camY = G.py*TILE - H/2 + TILE/2;
+
+  // Shake
+  let shakeX=0,shakeY=0;
+  if(G.shakeTimer>0){
+    shakeX = (Math.random()-0.5)*G.shakeIntensity;
+    shakeY = (Math.random()-0.5)*G.shakeIntensity;
+    G.shakeTimer--;
+  }
+
+  ctx.save();
+  ctx.translate(shakeX, shakeY);
+
+  // Background
+  ctx.fillStyle = level.ambience;
+  ctx.fillRect(0,0,W,H);
+
+  ctx.save();
+  ctx.translate(-camX, -camY);
+
+  // Draw tiles
+  for(let y=0;y<level.h;y++){
+    for(let x=0;x<level.w;x++){
+      const tile = level.map[y][x];
+      const tx=x*TILE, ty=y*TILE;
+
+      if(tile===1){
+        ctx.fillStyle = '#1a1028';
+        ctx.fillRect(tx,ty,TILE,TILE);
+        ctx.fillStyle = '#221838';
+        ctx.fillRect(tx+2,ty+2,TILE-4,TILE-4);
+      } else {
+        // Floor
+        ctx.fillStyle = (x+y)%2===0?'#0d0818':'#100b1e';
+        ctx.fillRect(tx,ty,TILE,TILE);
+        // Grid lines
+        ctx.strokeStyle = '#1a1030';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(tx,ty,TILE,TILE);
+      }
+
+      if(tile===2){
+        // Exit glow
+        const pulse = 0.5+0.5*Math.sin(G.time*0.05);
+        ctx.fillStyle = `rgba(102,204,170,${0.1+pulse*0.15})`;
+        ctx.fillRect(tx,ty,TILE,TILE);
+        ctx.fillStyle = '#66ccaa';
+        ctx.font = '20px serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('⬟',tx+TILE/2,ty+TILE/2+7);
+      }
+      if(tile===3&&!level.triggers[`${x},${y}`]?.done){
+        const pulse = 0.5+0.5*Math.sin(G.time*0.04);
+        ctx.fillStyle = `rgba(136,102,170,${0.05+pulse*0.08})`;
+        ctx.fillRect(tx,ty,TILE,TILE);
+      }
+    }
+  }
+
+  // Enemies
+  G.enemies.forEach(e=>{
+    if(e.spared||e.hp<=0) return;
+    const ex=e.x*TILE, ey=e.y*TILE;
+    ctx.fillStyle = e.color+'33';
+    ctx.fillRect(ex+2,ey+2,TILE-4,TILE-4);
+    ctx.font = '24px serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = e.color;
+    const bob = Math.sin(G.time*0.04+e.x)*2;
+    ctx.fillText(e.symbol, ex+TILE/2, ey+TILE/2+8+bob);
+  });
+
+  // Player - THE ROARING NIGHT
+  const ppx=G.px*TILE, ppy=G.py*TILE;
+  const playerBob = Math.sin(G.time*0.06)*2;
+
+  // Shadow/cloak
+  ctx.fillStyle = '#0a0514cc';
+  ctx.beginPath();
+  ctx.ellipse(ppx+TILE/2,ppy+TILE-4,14,6,0,0,Math.PI*2);
+  ctx.fill();
+
+  // Body (dark cloak)
+  ctx.fillStyle = '#1a0a2e';
+  ctx.fillRect(ppx+10,ppy+10+playerBob,TILE-20,TILE-14);
+
+  // Cloak flowing effect
+  const cloakWave = Math.sin(G.time*0.08)*2;
+  ctx.fillStyle = '#120820';
+  ctx.beginPath();
+  ctx.moveTo(ppx+8,ppy+14+playerBob);
+  ctx.lineTo(ppx+TILE-8,ppy+14+playerBob);
+  ctx.lineTo(ppx+TILE-6+cloakWave,ppy+TILE-4);
+  ctx.lineTo(ppx+6-cloakWave,ppy+TILE-4);
+  ctx.fill();
+
+  // Glowing eyes
+  const eyeGlow = 0.7+0.3*Math.sin(G.time*0.1);
+  ctx.fillStyle = `rgba(255,102,153,${eyeGlow})`;
+  ctx.fillRect(ppx+14,ppy+16+playerBob,4,3);
+  ctx.fillRect(ppx+22,ppy+16+playerBob,4,3);
+
+  // Eye glow effect
+  ctx.shadowColor = '#ff6699';
+  ctx.shadowBlur = 8;
+  ctx.fillRect(ppx+14,ppy+16+playerBob,4,3);
+  ctx.fillRect(ppx+22,ppy+16+playerBob,4,3);
+  ctx.shadowBlur = 0;
+
+  // Fog particles
+  if(level.fog && G.time%30===0) spawnFog(level.w*TILE, level.h*TILE);
+  if(G.time%20===0) spawnEmbers(ppx+TILE/2, ppy+TILE/2, 1);
+
+  // Render particles
+  G.particles.forEach(p=>{
+    p.x+=p.vx; p.y+=p.vy; p.life--;
+    const alpha = p.life/p.maxLife;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,p.size,0,Math.PI*2);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+  G.particles = G.particles.filter(p=>p.life>0);
+
+  ctx.restore();
+
+  // Fog of war vignette
+  if(level.fog){
+    const grd = ctx.createRadialGradient(W/2+shakeX,H/2+shakeY,TILE*2,W/2+shakeX,H/2+shakeY,TILE*5);
+    grd.addColorStop(0,'rgba(0,0,0,0)');
+    grd.addColorStop(1,'rgba(0,0,0,0.7)');
+    ctx.fillStyle = grd;
+    ctx.fillRect(0,0,W,H);
+  }
+
+  ctx.restore();
+}
+
+// ─── INPUT ───
+document.addEventListener('keydown',e=>{
+  keysPressed[e.key] = true;
+
+  if(G.scene==='title') return;
+
+  if(document.getElementById('dialogue-box').classList.contains('show')){
+    if(e.key===' '||e.key==='Enter'){ e.preventDefault(); advanceDialogue(); }
+    return;
+  }
+
+  if(G.scene==='battle'){
+    if(battlePhase==='menu') return; // handled by buttons
+    return;
+  }
+});
+document.addEventListener('keyup',e=>{ keysPressed[e.key]=false; });
+
+// Battle buttons
+document.querySelectorAll('.battle-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{ battleAction(btn.dataset.action); });
+});
+
+// Start button
+document.getElementById('start-btn').addEventListener('click',()=>{
+  initAudio();
+  playSelect();
+  document.getElementById('title-screen').style.display = 'none';
+  G.scene = 'overworld';
+  loadLevel(0);
+});
+
+// ─── INIT ───
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+requestAnimationFrame(render);
+
+// Element SDK
+window.elementSdk.init({
+  defaultConfig,
+  onConfigChange: async(config)=>{
+    document.getElementById('title-text').textContent = config.game_title||defaultConfig.game_title;
+    document.getElementById('player-name').textContent = config.game_title||defaultConfig.game_title;
+    document.body.style.background = config.background_color||defaultConfig.background_color;
+  },
+  mapToCapabilities:(config)=>({
+    recolorables:[
+      {get:()=>config.background_color||defaultConfig.background_color,set:v=>{config.background_color=v;window.elementSdk.setConfig({background_color:v})}},
+      {get:()=>config.surface_color||defaultConfig.surface_color,set:v=>{config.surface_color=v;window.elementSdk.setConfig({surface_color:v})}},
+      {get:()=>config.text_color||defaultConfig.text_color,set:v=>{config.text_color=v;window.elementSdk.setConfig({text_color:v})}},
+      {get:()=>config.primary_color||defaultConfig.primary_color,set:v=>{config.primary_color=v;window.elementSdk.setConfig({primary_color:v})}},
+      {get:()=>config.secondary_color||defaultConfig.secondary_color,set:v=>{config.secondary_color=v;window.elementSdk.setConfig({secondary_color:v})}}
+    ],
+    borderables:[],
+    fontEditable:{get:()=>config.font_family||'Press Start 2P',set:v=>{config.font_family=v;window.elementSdk.setConfig({font_family:v})}},
+    fontSizeable:undefined
+  }),
+  mapToEditPanelValues:(config)=>new Map([
+    ['game_title',config.game_title||defaultConfig.game_title]
+  ])
+});
+</script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9f521a95043f0cb4',t:'MTc3NzY3MzI5Ni4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
